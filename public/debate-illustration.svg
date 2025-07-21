@@ -1,0 +1,66 @@
+<svg width="800" height="600" viewBox="0 0 800 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Elements -->
+  <circle cx="400" cy="300" r="250" fill="#E6F0FF" opacity="0.5"/>
+  <circle cx="400" cy="300" r="200" fill="#CCE0FF" opacity="0.3"/>
+  
+  <!-- Left Person -->
+  <g>
+    <!-- Head -->
+    <circle cx="250" cy="250" r="60" fill="#4B88FD"/>
+    <!-- Body -->
+    <path d="M250 320C250 320 200 380 200 450C200 470 220 470 250 470C280 470 300 470 300 450C300 380 250 320 250 320Z" fill="#4B88FD"/>
+    <!-- Face -->
+    <circle cx="230" cy="240" r="8" fill="white"/>
+    <circle cx="270" cy="240" r="8" fill="white"/>
+    <path d="M230 270C230 270 250 290 270 270" stroke="white" stroke-width="4" stroke-linecap="round"/>
+  </g>
+  
+  <!-- Right Person -->
+  <g>
+    <!-- Head -->
+    <circle cx="550" cy="250" r="60" fill="#6C63FF"/>
+    <!-- Body -->
+    <path d="M550 320C550 320 500 380 500 450C500 470 520 470 550 470C580 470 600 470 600 450C600 380 550 320 550 320Z" fill="#6C63FF"/>
+    <!-- Face -->
+    <circle cx="530" cy="240" r="8" fill="white"/>
+    <circle cx="570" cy="240" r="8" fill="white"/>
+    <path d="M530 270C530 270 550 290 570 270" stroke="white" stroke-width="4" stroke-linecap="round"/>
+  </g>
+  
+  <!-- Speech Bubbles -->
+  <g>
+    <!-- Left Person Speech Bubble -->
+    <path d="M320 180C320 180 380 150 420 170C420 170 430 120 470 120C510 120 530 150 530 150C530 150 550 130 580 140C610 150 620 180 620 180L620 220C620 220 610 250 580 260C550 270 530 250 530 250C530 250 510 280 470 280C430 280 420 230 420 230C420 230 380 250 320 220L320 180Z" fill="white" stroke="#4B88FD" stroke-width="3"/>
+    <!-- Text in Left Bubble -->
+    <path d="M350 190L380 190" stroke="#4B88FD" stroke-width="3" stroke-linecap="round"/>
+    <path d="M390 190L450 190" stroke="#4B88FD" stroke-width="3" stroke-linecap="round"/>
+    <path d="M350 210L420 210" stroke="#4B88FD" stroke-width="3" stroke-linecap="round"/>
+    
+    <!-- Right Person Speech Bubble -->
+    <path d="M480 180C480 180 420 150 380 170C380 170 370 120 330 120C290 120 270 150 270 150C270 150 250 130 220 140C190 150 180 180 180 180L180 220C180 220 190 250 220 260C250 270 270 250 270 250C270 250 290 280 330 280C370 280 380 230 380 230C380 230 420 250 480 220L480 180Z" fill="white" stroke="#6C63FF" stroke-width="3"/>
+    <!-- Text in Right Bubble -->
+    <path d="M450 190L420 190" stroke="#6C63FF" stroke-width="3" stroke-linecap="round"/>
+    <path d="M410 190L350 190" stroke="#6C63FF" stroke-width="3" stroke-linecap="round"/>
+    <path d="M450 210L380 210" stroke="#6C63FF" stroke-width="3" stroke-linecap="round"/>
+  </g>
+  
+  <!-- AI Element in the Middle -->
+  <g>
+    <circle cx="400" cy="400" r="40" fill="#FFD166"/>
+    <path d="M380 390L420 390" stroke="white" stroke-width="4" stroke-linecap="round"/>
+    <path d="M380 410L420 410" stroke="white" stroke-width="4" stroke-linecap="round"/>
+    <path d="M380 400L420 400" stroke="white" stroke-width="4" stroke-linecap="round"/>
+    <!-- AI Connections -->
+    <path d="M370 370L320 320" stroke="#FFD166" stroke-width="3" stroke-dasharray="5 5"/>
+    <path d="M430 370L480 320" stroke="#FFD166" stroke-width="3" stroke-dasharray="5 5"/>
+  </g>
+  
+  <!-- Stars/Highlights -->
+  <g>
+    <circle cx="200" cy="150" r="10" fill="#FFD166"/>
+    <circle cx="600" cy="150" r="10" fill="#FFD166"/>
+    <circle cx="150" cy="350" r="8" fill="#FFD166"/>
+    <circle cx="650" cy="350" r="8" fill="#FFD166"/>
+    <circle cx="400" cy="100" r="12" fill="#FFD166"/>
+  </g>
+</svg>
