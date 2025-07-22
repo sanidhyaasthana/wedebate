@@ -120,8 +120,8 @@ export default function PracticePage() {
     setTimeRemaining(180); // Reset timer to 3 minutes
   };
 
-  // Submit user argument and get feedback
-  const handleSubmitArgument = async () => {
+  // Submit user argument and get feedback - Modified to accept optional aiArgumentOverride
+  const handleSubmitArgument = async (aiArgumentOverride?: string) => {
     if (!argument.trim()) return;
 
     setIsTimerRunning(false);
@@ -131,6 +131,9 @@ export default function PracticePage() {
       const topic = customTopic.trim() || selectedTopic;
       const userPosition = position === 'for' ? 'supporting' : 'opposing';
       const aiPosition = position === 'for' ? 'opposing' : 'supporting';
+      
+      // Use the override if provided, otherwise use the current aiArgument state
+      const currentAiArgument = aiArgumentOverride || aiArgument;
 
       // Call the API endpoint to generate feedback
       const response = await fetch('/api/feedback', {
@@ -141,7 +144,7 @@ export default function PracticePage() {
         body: JSON.stringify({
           topic,
           creatorArguments: argument,
-          opponentArguments: aiArgument,
+          opponentArguments: currentAiArgument,
         }),
       });
 
@@ -162,7 +165,7 @@ export default function PracticePage() {
             topic,
             user_position: position,
             user_argument: argument,
-            ai_argument: aiArgument,
+            ai_argument: currentAiArgument,
             feedback: feedbackResult
           }
         ]);
@@ -215,16 +218,27 @@ const currentSegment = selectedDebateFormat.structure[currentSegmentIndex].name;
     }
 
     const data = await response.json();
-    setAiArgument(data.argument);  // Expected { argument: string }
+    const newAiArgument = data.argument;  // Expected { argument: string }
+    setAiArgument(newAiArgument);
+    
+    // Return the new AI argument so it can be used immediately if needed
+    return newAiArgument;
   } catch (error) {
     console.error('Error generating AI argument:', error);
-    setAiArgument(
-      `Could not generate argument. Please try again later or enter one manually.`
-    );
+    const fallbackArgument = `Could not generate argument. Please try again later or enter one manually.`;
+    setAiArgument(fallbackArgument);
+    return fallbackArgument;
   } finally {
     setIsGeneratingFeedback(false);
   }
 };
+
+  // Modified submit handler that works with fresh AI argument
+  const handleSubmitWithCurrentAI = async () => {
+    // If we just generated an AI argument, we need to make sure we use the latest version
+    // Since state updates are async, we'll pass the current aiArgument directly
+    await handleSubmitArgument(aiArgument);
+  };
 
   // Reset practice session
   const handleReset = () => {
@@ -345,7 +359,7 @@ const currentSegment = selectedDebateFormat.structure[currentSegmentIndex].name;
             <ArgumentEditor
               value={argument}
               onChange={setArgument}
-              onSubmit={handleSubmitArgument}
+              onSubmit={handleSubmitWithCurrentAI}
               timeRemaining={timeRemaining}
               isRecording={false} // Not using speech recognition in practice mode
               onToggleRecording={() => {}} // Placeholder function
@@ -362,7 +376,7 @@ const currentSegment = selectedDebateFormat.structure[currentSegmentIndex].name;
                 Cancel
               </button>
               <button
-                onClick={handleSubmitArgument}
+                onClick={handleSubmitWithCurrentAI}
                 disabled={!argument.trim() || isGeneratingFeedback}
                 className={`px-6 py-2 rounded-lg text-white font-bold transition duration-200 ${argument.trim() && !isGeneratingFeedback ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-400 cursor-not-allowed'}`}
               >
@@ -415,4 +429,3 @@ const currentSegment = selectedDebateFormat.structure[currentSegmentIndex].name;
     </div>
   );
 }
-

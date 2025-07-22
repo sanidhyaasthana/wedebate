@@ -9,7 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@daily-co/daily-js": "^0.81.0",
+    "@daily-co/daily-js": "github:daily-co/daily-js",
     "@hookform/resolvers": "^5.1.1",
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@tailwindcss/typography": "^0.5.16",

@@ -149,3 +149,13 @@ export interface Database {
     }
   }
 }
+
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+  message: string;
+  type: string;
+}

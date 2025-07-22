@@ -93,12 +93,47 @@ export default function DebatePage() {
         ])
         .select();
       if (error) throw error;
+      
       if (data && data[0]) {
-        setCreatedDebate(data[0]);
+        // Create a Daily.co room for the debate
+        const debateId = data[0].id;
+        const dailyResponse = await fetch('/api/daily/create-room', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ debateId }),
+        });
+        
+        if (!dailyResponse.ok) {
+          throw new Error('Failed to create video room');
+        }
+        
+        const dailyData = await dailyResponse.json();
+        
+        // Update the debate with the Daily.co room URL
+        const { error: updateError } = await supabase
+          .from('debates')
+          .update({ daily_room_url: dailyData.url })
+          .eq('id', debateId);
+          
+        if (updateError) throw updateError;
+        
+        // Set the created debate with the updated data
+        const { data: updatedDebate, error: fetchError } = await supabase
+          .from('debates')
+          .select('*')
+          .eq('id', debateId)
+          .single();
+          
+        if (fetchError) throw fetchError;
+        
+        setCreatedDebate(updatedDebate);
         setShowCreateModal(false);
       }
     } catch (error) {
-      console.error('Error creating debate:', error || error);
+      console.error('Error creating debate:', error);
+      console.error('Failed to create debate. Please try again.');
     }
   };
 

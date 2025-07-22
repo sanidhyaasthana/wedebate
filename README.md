@@ -23,7 +23,7 @@ WeDebate is a web application that helps users improve their debate skills throu
 
 ### Prerequisites
 
-- Node.js 18+ and npm/yarn
+- Node.js 18+ and npm
 - Supabase account (free tier available)
 - OpenRouter API key (free tier available)
 
