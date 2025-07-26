@@ -18,7 +18,7 @@ const selectedDebateFormat = {
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '@supabase/ssr';
 import Link from 'next/link';
 import { sampleDebateTopics, debateFormats } from '@/utils/aiPrompts';
 import ArgumentEditor from '@/components/debate/ArgumentEditor';
@@ -28,7 +28,10 @@ import { formatTime } from '@/utils/timeUtils';
 
 export default function PracticePage() { 
   const router = useRouter();
-  const supabase = createClientComponentClient();
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
   
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -43,8 +46,9 @@ export default function PracticePage() {
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [feedback, setFeedback] = useState<any>(null);
   const [isGeneratingFeedback, setIsGeneratingFeedback] = useState(false);
-  const [userArgument, setUserArgument] = useState(''); // Added userArgument state
-  const [aiResponse, setAiResponse] = useState<string | null>(null); // Added aiResponse state
+  const [userArgument, setUserArgument] = useState('');
+  const [aiResponse, setAiResponse] = useState<string | null>(null);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
 
   // Check authentication status
   useEffect(() => {
@@ -128,12 +132,17 @@ export default function PracticePage() {
     setIsGeneratingFeedback(true);
 
     try {
+      setFeedbackError(null);
       const topic = customTopic.trim() || selectedTopic;
       const userPosition = position === 'for' ? 'supporting' : 'opposing';
       const aiPosition = position === 'for' ? 'opposing' : 'supporting';
-      
+
       // Use the override if provided, otherwise use the current aiArgument state
       const currentAiArgument = aiArgumentOverride || aiArgument;
+
+      if (!argument.trim() || !currentAiArgument.trim()) {
+        throw new Error('Both your argument and AI response are required for feedback');
+      }
 
       // Call the API endpoint to generate feedback
       const response = await fetch('/api/feedback', {
@@ -143,16 +152,25 @@ export default function PracticePage() {
         },
         body: JSON.stringify({
           topic,
-          creatorArguments: argument,
-          opponentArguments: currentAiArgument,
+          creatorArguments: argument.trim(),
+          opponentArguments: currentAiArgument.trim(),
         }),
+        credentials: 'include', // Important for auth cookies
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error('Failed to generate feedback');
+        console.error('Feedback API error:', data);
+        throw new Error(data.error || 'Failed to generate feedback');
+      }
+      
+      // Validate feedback structure
+      if (!data || typeof data !== 'object' || !('clarity' in data)) {
+        throw new Error('Invalid feedback format received');
       }
 
-      const feedbackResult = await response.json();
+      const feedbackResult = data;
 
       setFeedback(feedbackResult);
       setPracticeMode('feedback');
@@ -196,23 +214,30 @@ const currentSegment = selectedDebateFormat.structure[currentSegmentIndex].name;
 
 
  const handleGenerateAIArgument = async () => {
+  if (!userArgument.trim()) {
+    console.error('Error: userArgument is empty');
+    alert('Please provide your argument before generating an AI response.');
+    return;
+  }
+
   setIsGeneratingFeedback(true);
   try {
     const topic = customTopic.trim() || selectedTopic;
     const stance = position === 'for' ? 'against' : 'for';
 
     const response = await fetch('/api/argument', {
-       method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    userArgument: userArgument,
-    topic: topic,
-    position: position, // 'for' or 'against'
-    debateSegment: currentSegment // 
-  }),
-});
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userArgument: userArgument.trim(),
+        topic: topic,
+        position: position, // 'for' or 'against'
+        debateSegment: currentSegment // 
+      }),
+    });
+
     if (!response.ok) {
       throw new Error('Failed to generate AI argument');
     }
@@ -220,7 +245,7 @@ const currentSegment = selectedDebateFormat.structure[currentSegmentIndex].name;
     const data = await response.json();
     const newAiArgument = data.argument;  // Expected { argument: string }
     setAiArgument(newAiArgument);
-    
+
     // Return the new AI argument so it can be used immediately if needed
     return newAiArgument;
   } catch (error) {
@@ -358,7 +383,10 @@ const currentSegment = selectedDebateFormat.structure[currentSegmentIndex].name;
             
             <ArgumentEditor
               value={argument}
-              onChange={setArgument}
+              onChange={(value) => {
+                setArgument(value);
+                setUserArgument(value);
+              }}
               onSubmit={handleSubmitWithCurrentAI}
               timeRemaining={timeRemaining}
               isRecording={false} // Not using speech recognition in practice mode

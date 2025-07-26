@@ -28,9 +28,11 @@ export async function POST(request: Request) {
           enable_people_ui: true,
           enable_screenshare: true,
           enable_network_ui: true,
+          enable_noise_cancellation: true,
+          max_participants: 2,
           start_video_off: false,
           start_audio_off: false,
-          exp: Math.round(Date.now() / 1000) + 60 * 60 * 24, // 24 hours
+          exp: Math.floor(Date.now() / 1000) + 24 * 60 * 60 // 24 hours from now
         },
       }),
     });

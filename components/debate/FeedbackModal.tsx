@@ -5,12 +5,13 @@ import ReactMarkdown from 'react-markdown';
 import { DebateFeedback } from '@/lib/openrouter';
 
 type FeedbackModalProps = {
-  feedback: DebateFeedback;
+  feedback: DebateFeedback | null;
   onClose: () => void;
   showClose?: boolean;
+  error?: string | null;
 };
 
-const FeedbackModal = ({ feedback, onClose, showClose = true }: FeedbackModalProps) => {
+const FeedbackModal = ({ feedback, onClose, showClose = true, error }: FeedbackModalProps) => {
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -34,6 +35,27 @@ const FeedbackModal = ({ feedback, onClose, showClose = true }: FeedbackModalPro
       document.removeEventListener('keydown', handleEscapeKey);
     };
   }, [onClose]);
+
+  if (error) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg max-w-lg w-full">
+          <h2 className="text-xl font-bold text-red-600 mb-4">Error</h2>
+          <p className="text-gray-700 dark:text-gray-300">{error}</p>
+          <button
+            onClick={onClose}
+            className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!feedback) {
+    return null;
+  }
 
   // Helper function to get color based on score
   const getScoreColor = (score: number) => {

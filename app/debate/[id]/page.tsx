@@ -2,13 +2,16 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '@supabase/ssr';
 import DebateRoom from '@/components/debate/DebateRoom';
 
 export default function DebateRoomPage() {
   const params = useParams();
   const router = useRouter();
-  const supabase = createClientComponentClient();
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
   const debateId = params.id as string;
   
   const [user, setUser] = useState<any>(null);
@@ -101,8 +104,6 @@ export default function DebateRoomPage() {
     );
   }
 
-  const dailyRoomUrl = debate?.daily_room_url;
-
   if (!debate) {
     return (
       <div className="container mx-auto px-4 py-12">
@@ -121,12 +122,12 @@ export default function DebateRoomPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-6">
+    <div className="min-h-screen bg-gray-100">
       {user?.id && debateId && (
         <DebateRoom 
           debateId={debateId} 
           userId={user.id} 
-          dailyRoomUrl={dailyRoomUrl}
+          roomName={debate.room_name}
         />
       )}
     </div>

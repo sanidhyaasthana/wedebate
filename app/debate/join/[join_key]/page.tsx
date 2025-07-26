@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createBrowserClient } from "@supabase/ssr";
 
 export default function JoinDebateByKeyPage() {
   const params = useParams();
   const router = useRouter();
-  const supabase = createClientComponentClient();
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
   const joinKey = params.join_key as string;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

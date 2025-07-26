@@ -24,3 +24,28 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+#__next {
+  height: 100%;
+}
+
+/* Jitsi Meet specific styles */
+.jitsi-meet-container {
+  height: 100vh !important;
+  width: 100vw !important;
+}
+
+/* Hide Jitsi watermark if needed */
+.watermark {
+  display: none !important;
+}

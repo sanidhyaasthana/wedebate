@@ -1,20 +1,8 @@
 
 
 import React, { useState, useEffect, useRef } from 'react';
-import DailyIframe from '@daily-co/daily-js';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-
-import type { DailyEventObjectParticipantLeft } from '@daily-co/daily-js';
-
-import  {
-  DailyCall,
-  DailyParticipant,
-  DailyEventObjectParticipant,
-} from '@daily-co/daily-js';
-
-
-
-const dailyClient = DailyIframe.createCallObject();
+import { createBrowserClient } from '@supabase/ssr';
+import Script from 'next/script';
 
 
 
@@ -25,6 +13,24 @@ interface Participant {
   isModerator: boolean;
   videoEnabled: boolean;
   audioEnabled: boolean;
+}
+
+declare global {
+  interface Window {
+    JitsiMeetExternalAPI: any;
+  }
+}
+
+interface DebateRoomProps {
+  debateId: string;
+  userId: string;
+  roomName: string;
+}
+
+interface JitsiParticipant {
+  id: string;
+  displayName?: string;
+  role?: string;
 }
 
 interface DebateSegment {
@@ -42,9 +48,16 @@ interface Argument {
   segmentId: string;
 }
 
-const DebateRoom: React.FC = () => {
-  const [dailyClient] = useState(() => DailyIframe.createCallObject());
-  const supabase = createClientComponentClient();
+const DebateRoom: React.FC<DebateRoomProps> = ({ debateId, userId, roomName }) => {
+  const [isCallStarted, setIsCallStarted] = useState(false);
+  const [isSpeakerTurn, setIsSpeakerTurn] = useState(false);
+  const jitsiRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [currentSegment, setCurrentSegment] = useState<DebateSegment | null>(null);
@@ -66,58 +79,79 @@ const DebateRoom: React.FC = () => {
     { id: 'closing', title: 'Closing Statements', duration: 180 }
   ];
 useEffect(() => {
-  const initVideoCall = async () => {
+  const loadJitsiAndInitialize = async () => {
     try {
-      const call: DailyCall = dailyClient;
+      if (!window.JitsiMeetExternalAPI) {
+        console.log('Loading Jitsi script...');
+        await new Promise<void>((resolve) => {
+          const script = document.createElement('script');
+          script.src = 'https://8x8.vc/vpaas-magic-cookie-5e8e0def5859454485843092f994fcc3/external_api.js';
+          script.async = true;
+          script.onload = () => resolve();
+          document.body.appendChild(script);
+        });
+      }
 
-      await call.join({
-        url: process.env.NEXT_PUBLIC_DAILY_ROOM_URL!,
-        subscribeToTracksAutomatically: true,
-      });
-
-      // Access local participant
-   const videoElementRef = useRef<HTMLVideoElement>(null);
-
-useEffect(() => {
-  const localParticipant = call.participants().local;
-
-  if (videoElementRef.current && localParticipant?.videoTrack) {
-    videoElementRef.current.srcObject = new MediaStream([localParticipant.videoTrack as MediaStreamTrack]);
-  }
-}, [call]);
-
-      // Handle participant joined
-      call.on('participant-joined', (event: DailyEventObjectParticipant) => {
-        const p: DailyParticipant = event.participant;
-        setParticipants((prev) => [
-          ...prev,
-          {
-            id: p.session_id,
-            name: p.user_name || 'Anonymous',
-            isModerator: p.user_id === 'moderator',
-            videoEnabled: p.tracks.video?.state === 'playable',
-            audioEnabled: p.tracks.audio?.state === 'playable',
+      if (containerRef.current && window.JitsiMeetExternalAPI) {
+        const domain = '8x8.vc';
+        const options = {
+          roomName: roomName,
+          width: '100%',
+          height: '100%',
+          parentNode: containerRef.current,
+          configOverwrite: {
+            startWithAudioMuted: !isSpeakerTurn,
+            prejoinPageEnabled: false,
+            toolbarButtons: [
+              'microphone', 'camera', 'fullscreen', 'chat',
+              'settings', 'raisehand', 'videoquality'
+            ]
           },
-        ]);
-      });
+          interfaceConfigOverwrite: {
+            SHOW_JITSI_WATERMARK: false,
+            DISABLE_JOIN_LEAVE_NOTIFICATIONS: true
+          },
+          userInfo: {
+            displayName: userId
+          }
+        };
 
-      // Handle participant left
-      call.on('participant-left', (event: DailyEventObjectParticipantLeft) => {
-        const sessionId = event.participant.session_id;
-        console.log('Participant left with session_id:', sessionId);
-        setParticipants((prev) => prev.filter((p) => p.id !== sessionId));
-      });
-    } catch (err) {
-      console.error('Error joining Daily call:', err);
+        console.log('Initializing Jitsi with options:', options);
+        const jitsi = new window.JitsiMeetExternalAPI(domain, options);
+        jitsiRef.current = jitsi;
+
+        jitsi.addEventListeners({
+          participantJoined: (participant: JitsiParticipant) => {
+            console.log('Participant joined:', participant);
+            setParticipants(prev => [...prev, {
+              id: participant.id,
+              name: participant.displayName || 'Anonymous',
+              isModerator: participant.role === 'moderator',
+              videoEnabled: true,
+              audioEnabled: true
+            }]);
+          },
+          participantLeft: (participant: { id: string }) => {
+            console.log('Participant left:', participant);
+            setParticipants(prev => prev.filter(p => p.id !== participant.id));
+          }
+        });
+
+        setIsCallStarted(true);
+      }
+    } catch (error) {
+      console.error('Error initializing Jitsi:', error);
     }
   };
 
-  initVideoCall();
+  loadJitsiAndInitialize();
 
   return () => {
-    dailyClient.leave();
+    if (jitsiRef.current) {
+      jitsiRef.current.dispose();
+    }
   };
-}, []);
+}, [roomName, userId, isSpeakerTurn]);
 
 useEffect(() => {
   return () => {
@@ -256,7 +290,20 @@ recognition.onresult = (event: CustomSpeechRecognitionEvent) => {
 
   return (
     <div className="debate-room">
-      <div className="video-grid" ref={videoElementRef}></div>
+      <Script
+        src="https://8x8.vc/vpaas-magic-cookie-5e8e0def5859454485843092f994fcc3/external_api.js"
+        strategy="lazyOnload"
+      />
+      <div 
+        id="jaas-container"
+        ref={containerRef}
+        style={{ 
+          width: '100%', 
+          height: 'calc(100vh - 200px)', 
+          marginBottom: '20px',
+          position: 'relative'
+        }}
+      />
 
       <div className="debate-controls">
         <h2>{currentSegment?.title || 'Debate Not Started'}</h2>
@@ -336,5 +383,8 @@ recognition.onresult = (event: CustomSpeechRecognitionEvent) => {
     </div>
   );
 };
+
+
+
 
 export default DebateRoom;

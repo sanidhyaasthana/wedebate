@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import DailyIframe, { DailyCall, DailyEventObjectParticipantLeft } from '@daily-co/daily-js';
 
-const VideoCallComponent = () => {
+interface VideoCallComponentProps {
+  roomUrl: string;
+}
+
+const VideoCallComponent = ({ roomUrl }: VideoCallComponentProps) => {
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const [participants, setParticipants] = useState<any[]>([]);
   const dailyClientRef = useRef<DailyCall | null>(null);
@@ -9,13 +13,17 @@ const VideoCallComponent = () => {
   useEffect(() => {
     const initVideoCall = async () => {
       try {
-        const daily = DailyIframe.createCallObject();
+        const daily = DailyIframe.createCallObject({
+          url: roomUrl,
+          showLeaveButton: true,
+          showFullscreenButton: true,
+        });
         dailyClientRef.current = daily;
 
-      await daily.join({
-  url: process.env.NEXT_PUBLIC_DAILY_ROOM_URL!,
-  subscribeToTracksAutomatically: true
-});
+        await daily.join({
+          url: roomUrl,
+          subscribeToTracksAutomatically: true
+        });
 
 const localParticipant = daily.participants().local;
 
@@ -24,6 +32,7 @@ const localParticipant = daily.participants().local;
         }
 
         daily.on('participant-joined', (event) => {
+          if (!event) return;
           const p = event.participant;
           setParticipants((prev) => [
             ...prev,
@@ -37,7 +46,8 @@ const localParticipant = daily.participants().local;
           ]);
         });
 
-        daily.on('participant-left', (event: DailyEventObjectParticipantLeft) => {
+        daily.on('participant-left', (event?: DailyEventObjectParticipantLeft) => {
+          if (!event) return;
           const sessionId = event.participant.session_id;
           console.log('Participant left with session_id:', sessionId);
         });
