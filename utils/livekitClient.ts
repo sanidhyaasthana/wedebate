@@ -185,11 +185,28 @@ class LiveKitConnectionManager implements ConnectionManager {
 
   public async connect(config: ConnectionConfig): Promise<void> {
     try {
+      // Check if already connected to the same room
+      if (this.isConnected && this.room && this.config?.roomName === config.roomName) {
+        console.log('✅ Already connected to room:', config.roomName);
+        return;
+      }
+
+      // Check if connection is in progress
+      if (this.connectionState === ConnectionState.Connecting) {
+        console.log('⏳ Connection already in progress...');
+        return;
+      }
+
       this.config = config;
       
-      if (!this.room) {
-        this.setupRoom();
+      // Disconnect from any existing room first
+      if (this.room && this.isConnected) {
+        console.log('🔄 Disconnecting from existing room before connecting to new one...');
+        await this.room.disconnect();
       }
+      
+      // Always create a fresh room instance
+      this.setupRoom();
 
       if (!this.room) {
         throw new Error('Failed to create room');
@@ -212,7 +229,9 @@ class LiveKitConnectionManager implements ConnectionManager {
         throw new Error('Invalid WebSocket URL format');
       }
 
+      console.log('🔌 Calling room.connect...');
       await this.room.connect(config.url, config.token);
+      console.log('✅ Room.connect completed successfully');
 
       // Enable camera and microphone based on role
       if (config.role !== 'audience') {
@@ -240,6 +259,8 @@ class LiveKitConnectionManager implements ConnectionManager {
           errorMessage = 'Network connection failed. Please check your internet connection.';
         } else if (error.message.includes('permission')) {
           errorMessage = 'Permission denied. Please allow camera and microphone access.';
+        } else if (error.message.includes('timeout')) {
+          errorMessage = 'Connection timeout. Please try again.';
         } else {
           errorMessage = error.message;
         }

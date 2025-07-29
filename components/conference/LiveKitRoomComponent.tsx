@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ConnectionState, Participant } from 'livekit-client';
 import { getConnectionManager, getAccessToken, ConnectionConfig } from '@/utils/livekitClient';
 import VideoTile from './VideoTile';
@@ -33,17 +33,36 @@ const LiveKitRoomComponent: React.FC<LiveKitRoomComponentProps> = ({
   
   const connectionManager = getConnectionManager();
   const handleError = useErrorHandler();
+  const hasConnected = useRef(false);
+  const connectionAttempted = useRef(false);
 
-  // Connect to room
+  // Connect to room - only called once
   const connectToRoom = useCallback(async () => {
-    if (isConnecting) return;
+    // Prevent multiple connection attempts
+    if (connectionAttempted.current || isConnecting) {
+      console.log('⚠️ Connection already attempted or in progress');
+      return;
+    }
     
+    // If already connected to the same room, don't reconnect
+    if (connectionManager.isConnected && connectionManager.room?.name === roomName) {
+      console.log('✅ Already connected to room:', roomName);
+      setIsConnecting(false);
+      return;
+    }
+    
+    connectionAttempted.current = true;
     setIsConnecting(true);
     setError(null);
 
     try {
+      console.log('🎫 Getting access token for:', { roomName, participantName, role });
       // Get access token
       const { token, url } = await getAccessToken(roomName, participantName, role);
+
+      if (!token || !url) {
+        throw new Error('Invalid token or URL received from server');
+      }
 
       // Prepare connection config
       const config: ConnectionConfig = {
@@ -54,22 +73,34 @@ const LiveKitRoomComponent: React.FC<LiveKitRoomComponentProps> = ({
         role,
       };
 
+      console.log('🔗 Attempting to connect to room with config:', { url, roomName, participantName, role });
+      
       // Connect using connection manager
       await connectionManager.connect(config);
+      hasConnected.current = true;
+      console.log('✅ Successfully connected to room');
       
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to connect to room';
+      console.error('❌ Connection failed:', errorMessage, err);
       setError(errorMessage);
       handleError(err instanceof Error ? err : new Error(errorMessage));
+      connectionAttempted.current = false; // Allow retry on error
     } finally {
       setIsConnecting(false);
     }
-  }, [roomName, participantName, role, isConnecting, handleError]);
+  }, [roomName, participantName, role, isConnecting, handleError, connectionManager]);
 
   // Disconnect from room
   const disconnectFromRoom = useCallback(async () => {
     try {
+      console.log('🚪 Disconnecting from room...');
       await connectionManager.disconnect();
+      
+      // Reset connection flags
+      connectionAttempted.current = false;
+      hasConnected.current = false;
+      
       onLeave?.();
     } catch (err) {
       console.error('Error disconnecting:', err);
@@ -77,9 +108,13 @@ const LiveKitRoomComponent: React.FC<LiveKitRoomComponentProps> = ({
     }
   }, [onLeave, handleError]);
 
-  // Set up connection manager listeners
+  // Set up connection manager listeners - run only once
   useEffect(() => {
+    let isMounted = true;
+
     const handleStateChange = (state: ConnectionState) => {
+      if (!isMounted) return;
+      console.log('🔄 Connection state changed:', state);
       setConnectionState(state);
       
       // Update connection quality based on state
@@ -99,10 +134,14 @@ const LiveKitRoomComponent: React.FC<LiveKitRoomComponentProps> = ({
     };
 
     const handleParticipantChange = (newParticipants: Map<string, Participant>) => {
+      if (!isMounted) return;
+      console.log('👥 Participants changed:', newParticipants.size);
       setParticipants(new Map(newParticipants));
     };
 
     const handleConnectionError = (error: Error) => {
+      if (!isMounted) return;
+      console.error('🚨 Connection error:', error.message);
       setError(error.message);
       handleError(error);
     };
@@ -112,18 +151,28 @@ const LiveKitRoomComponent: React.FC<LiveKitRoomComponentProps> = ({
     connectionManager.onParticipantChange(handleParticipantChange);
     connectionManager.onError(handleConnectionError);
 
-    // Initial connection
-    connectToRoom();
-
     // Cleanup on unmount
     return () => {
+      isMounted = false;
+      console.log('🧹 Cleaning up connection manager...');
       connectionManager.cleanup();
     };
-  }, [connectToRoom, handleError]);
+  }, []); // Empty dependency array - run only once
+
+  // Separate effect for initial connection
+  useEffect(() => {
+    if (!connectionAttempted.current && !connectionManager.isConnected) {
+      console.log('🚀 Initiating first connection...');
+      connectToRoom();
+    }
+  }, [connectToRoom]);
 
   // Handle retry connection
   const handleRetry = useCallback(() => {
+    console.log('🔄 Retrying connection...');
     setError(null);
+    connectionAttempted.current = false; // Reset attempt flag
+    hasConnected.current = false; // Reset connection flag
     connectToRoom();
   }, [connectToRoom]);
 

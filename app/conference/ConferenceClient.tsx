@@ -119,6 +119,7 @@ export default function ConferenceClient() {
         ) : (
           roomData && (
             <LiveKitRoomComponent
+              key={`${roomData.roomName}-${roomData.participantName}`}
               roomName={roomData.roomName}
               participantName={roomData.participantName}
               role={roomData.role}

@@ -21,7 +21,7 @@ export default function Home() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4">
             <Link 
-              href="/debate" 
+              href="/conference" 
               className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg text-center transition duration-200"
             >
               Start Debating
