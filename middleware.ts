@@ -47,8 +47,13 @@ export async function middleware(request: NextRequest) {
     style-src 'self' 'unsafe-inline';
     img-src 'self' blob: data:;
     font-src 'self';
-    connect-src 'self' https://*.supabase.co wss://*.daily.co https://*.daily.co;
-    frame-src 'self' https://*.daily.co;
+    connect-src 'self' https://*.supabase.co wss://*.daily.co https://*.daily.co;  wedebate-q5p3jywe.livekit.cloud wss://wedebate-q5p3jywe.livekit.cloud https://*.livekit.cloud wss://*.livekit.cloud;
+              script-src 'self' 'unsafe-eval' 'unsafe-inline';
+              style-src 'self' 'unsafe-inline';
+
+    frame-src 'self' https://*.daily.co; wedebate-q5p3jywe.livekit.cloud wss://wedebate-q5p3jywe.livekit.cloud https://*.livekit.cloud wss://*.livekit.cloud;
+              script-src 'self' 'unsafe-eval' 'unsafe-inline';
+              style-src 'self' 'unsafe-inline';
     media-src 'self' blob:;
     worker-src 'self' blob:;
     base-uri 'self';
