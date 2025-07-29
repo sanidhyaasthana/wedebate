@@ -89,9 +89,9 @@ const useAuth = () => {
 
 const navLinks = [
   { href: '/', label: 'Home', showAlways: true },
-  { href: '/debate', label: 'Debate', showAlways: false },
-  { href: '/practice', label: 'Practice', showAlways: false },
-  { href: '/profile', label: 'Profile', showAlways: false },
+  { href: '/conference', label: 'Debate', showAlways:true},
+  { href: '/practice', label: 'Practice', showAlways: true },
+  { href: '/profile', label: 'Profile', showAlways: true },
 ];
 
 const Navbar = () => {
