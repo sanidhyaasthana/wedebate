@@ -1,6 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/components/auth/AuthProvider';
+import { createClient } from '@/utils/supabase/client';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { cn } from '../../lib/utils';
@@ -28,6 +30,10 @@ const JoinRoom: React.FC<JoinRoomProps> = ({
   isLoading = false,
   className,
 }) => {
+  const { user } = useAuth();
+  const supabase = createClient();
+  const [profile, setProfile] = useState<any>(null);
+  
   const [formData, setFormData] = useState<JoinRoomFormData>({
     roomName: '',
     participantName: '',
@@ -35,6 +41,34 @@ const JoinRoom: React.FC<JoinRoomProps> = ({
   });
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+
+  // Load user profile and set default participant name
+  useEffect(() => {
+    const loadProfile = async () => {
+      if (user) {
+        try {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+          
+          setProfile(profileData);
+          
+          // Set default participant name from profile or email
+          const defaultName = profileData?.username || user.email?.split('@')[0] || 'User';
+          setFormData(prev => ({ ...prev, participantName: defaultName }));
+        } catch (error) {
+          console.error('Error loading profile:', error);
+          // Fallback to email-based name
+          const defaultName = user.email?.split('@')[0] || 'User';
+          setFormData(prev => ({ ...prev, participantName: defaultName }));
+        }
+      }
+    };
+
+    loadProfile();
+  }, [user, supabase]);
 
   // Validation rules
   const validateField = (name: keyof JoinRoomFormData, value: string): string | undefined => {

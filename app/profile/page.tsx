@@ -2,17 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { createBrowserClient } from '@supabase/ssr';
+import { useAuth } from '@/components/auth/AuthProvider';
+import { createClient } from '@/utils/supabase/client';
 import Link from 'next/link';
 
 export default function ProfilePage() {
   const router = useRouter();
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const { user, loading: authLoading, signOut } = useAuth();
+  const supabase = createClient();
   
-  const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -27,46 +25,22 @@ export default function ProfilePage() {
   const [practiceHistory, setPracticeHistory] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'debates' | 'practice'>('debates');
   
-  // Check authentication status
+  // Check authentication status and load data
   useEffect(() => {
-    const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setUser(session.user);
-        fetchUserProfile(session.user.id);
-        fetchUserStats(session.user.id);
-        fetchDebateHistory(session.user.id);
-        fetchPracticeHistory(session.user.id);
-      } else {
-        // Redirect to sign in if not authenticated
-        router.push('/auth/signin?redirect=/profile');
-        return;
-      }
-      setLoading(false);
-    };
+    if (authLoading) return;
     
-    checkUser();
-    
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (session?.user) {
-          setUser(session.user);
-          fetchUserProfile(session.user.id);
-          fetchUserStats(session.user.id);
-          fetchDebateHistory(session.user.id);
-          fetchPracticeHistory(session.user.id);
-        } else {
-          setUser(null);
-          router.push('/auth/signin?redirect=/profile');
-        }
-        setLoading(false);
-      }
-    );
-    
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
-  }, [supabase, router]);
+    if (!user) {
+      router.push('/auth/signin?redirect=/profile');
+      return;
+    }
+
+    // Load user data
+    fetchUserProfile(user.id);
+    fetchUserStats(user.id);
+    fetchDebateHistory(user.id);
+    fetchPracticeHistory(user.id);
+    setLoading(false);
+  }, [user, authLoading, router]);
 
   // Fetch user profile
   const fetchUserProfile = async (userId: string) => {
@@ -183,6 +157,8 @@ export default function ProfilePage() {
   // Update profile
   const handleUpdateProfile = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!user) return;
+    
     const formData = new FormData(e.currentTarget);
     const username = formData.get('username') as string;
     
@@ -205,7 +181,7 @@ export default function ProfilePage() {
     }
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="container mx-auto px-4 py-12 flex justify-center items-center min-h-[60vh]">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
@@ -258,7 +234,7 @@ export default function ProfilePage() {
             
             <button
               onClick={async () => {
-                await supabase.auth.signOut();
+                await signOut();
                 router.push('/');
               }}
               className="w-full border border-red-500 text-red-500 font-bold py-2 px-4 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition duration-200"

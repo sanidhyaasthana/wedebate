@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
         roomAdmin: true,
         roomRecord: true,
       });
-    } else if (role === 'debater') {
+    } else if (role === 'participant' || role === 'debater') {
       token.addGrant({
         room: roomName,
         roomJoin: true,

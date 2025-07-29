@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createBrowserClient } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/client';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -26,7 +26,7 @@ const AuthForm = ({ mode: initialMode, redirectTo }: AuthFormProps) => {
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const supabase = createBrowserClient();
+  const supabase = createClient();
   const router = useRouter();
 
   const { register, handleSubmit, formState: { errors }, reset } = useForm<AuthFormValues>({

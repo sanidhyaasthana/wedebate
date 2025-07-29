@@ -196,15 +196,30 @@ class LiveKitConnectionManager implements ConnectionManager {
       }
 
       console.log('🔗 Connecting to LiveKit room:', config.roomName);
+      console.log('🔗 Using URL:', config.url);
+      console.log('🔗 Participant:', config.participantName, 'Role:', config.role);
+      
       this.connectionState = ConnectionState.Connecting;
       this.notifyStateChange(ConnectionState.Connecting);
+
+      // Validate token format
+      if (!config.token || config.token.split('.').length !== 3) {
+        throw new Error('Invalid JWT token format');
+      }
+
+      // Validate URL format
+      if (!config.url || (!config.url.startsWith('ws://') && !config.url.startsWith('wss://'))) {
+        throw new Error('Invalid WebSocket URL format');
+      }
 
       await this.room.connect(config.url, config.token);
 
       // Enable camera and microphone based on role
       if (config.role !== 'audience') {
         try {
+          console.log('🎥 Enabling camera and microphone...');
           await this.room.localParticipant.enableCameraAndMicrophone();
+          console.log('✅ Camera and microphone enabled');
         } catch (error) {
           console.warn('⚠️ Failed to enable camera/microphone:', error);
           // Continue without media - user can enable later
@@ -215,7 +230,22 @@ class LiveKitConnectionManager implements ConnectionManager {
       console.error('❌ Failed to connect to room:', error);
       this.connectionState = ConnectionState.Disconnected;
       this.notifyStateChange(ConnectionState.Disconnected);
-      this.notifyError(error instanceof Error ? error : new Error('Connection failed'));
+      
+      // Provide more specific error messages
+      let errorMessage = 'Connection failed';
+      if (error instanceof Error) {
+        if (error.message.includes('token')) {
+          errorMessage = 'Invalid access token. Please try again.';
+        } else if (error.message.includes('network') || error.message.includes('websocket')) {
+          errorMessage = 'Network connection failed. Please check your internet connection.';
+        } else if (error.message.includes('permission')) {
+          errorMessage = 'Permission denied. Please allow camera and microphone access.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      this.notifyError(new Error(errorMessage));
       throw error;
     }
   }
@@ -331,24 +361,43 @@ export function getConnectionManager(): LiveKitConnectionManager {
 
 // Utility functions
 export async function getAccessToken(roomName: string, participantName: string, role: string): Promise<{ token: string; url: string }> {
-  const response = await fetch('/api/token', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      roomName,
-      participantName,
-      role,
-    }),
-  });
+  console.log('🎫 Requesting access token for:', { roomName, participantName, role });
+  
+  try {
+    const response = await fetch('/api/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        roomName,
+        participantName,
+        role,
+      }),
+    });
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to get access token');
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Token request failed:', response.status, errorText);
+      
+      let errorMessage = 'Failed to get access token';
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMessage = errorJson.error || errorMessage;
+      } catch {
+        errorMessage = `HTTP ${response.status}: ${errorText}`;
+      }
+      
+      throw new Error(errorMessage);
+    }
+
+    const tokenData = await response.json();
+    console.log('✅ Access token received successfully');
+    return tokenData;
+  } catch (error) {
+    console.error('❌ Error getting access token:', error);
+    throw error;
   }
-
-  return response.json();
 }
 
 export { RoomEvent, Track, ConnectionState, DisconnectReason };

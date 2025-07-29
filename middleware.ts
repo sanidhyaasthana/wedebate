@@ -8,7 +8,6 @@ export async function middleware(request: NextRequest) {
     },
   })
 
-  // Create Supabase client with cookie handling
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -36,33 +35,26 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Refresh session if available
   await supabase.auth.getUser()
 
-  // Add security headers for content security policy
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64')
+
   const cspHeader = `
     default-src 'self';
-    script-src 'self' 'nonce-${nonce}' 'unsafe-eval' 'unsafe-inline';
-    style-src 'self' 'unsafe-inline';
-    img-src 'self' blob: data:;
-    font-src 'self';
-    connect-src 'self' https://*.supabase.co wss://*.daily.co https://*.daily.co;  wedebate-q5p3jywe.livekit.cloud wss://wedebate-q5p3jywe.livekit.cloud https://*.livekit.cloud wss://*.livekit.cloud;
-              script-src 'self' 'unsafe-eval' 'unsafe-inline';
-              style-src 'self' 'unsafe-inline';
-
-    frame-src 'self' https://*.daily.co; wedebate-q5p3jywe.livekit.cloud wss://wedebate-q5p3jywe.livekit.cloud https://*.livekit.cloud wss://*.livekit.cloud;
-              script-src 'self' 'unsafe-eval' 'unsafe-inline';
-              style-src 'self' 'unsafe-inline';
-    media-src 'self' blob:;
+    script-src 'self' 'nonce-${nonce}' 'unsafe-eval' 'unsafe-inline' https://accounts.google.com https://apis.google.com;
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+    img-src 'self' blob: data: https: *.googleusercontent.com;
+    font-src 'self' data: https://fonts.gstatic.com;
+    connect-src 'self' https://*.supabase.co https://api.daily.co https://*.daily.co wss://*.daily.co https://wedebate-q5p3jywe.livekit.cloud wss://wedebate-q5p3jywe.livekit.cloud https://*.livekit.cloud wss://*.livekit.cloud https://accounts.google.com https://openrouter.ai https://api.openrouter.ai;
+    frame-src 'self' https://*.daily.co https://wedebate-q5p3jywe.livekit.cloud https://*.livekit.cloud https://accounts.google.com;
+    media-src 'self' blob: data: https://wedebate-q5p3jywe.livekit.cloud https://*.livekit.cloud mediastream:;
     worker-src 'self' blob:;
     base-uri 'self';
-    form-action 'self';
-    block-all-mixed-content;
+    form-action 'self' https://accounts.google.com;
+    object-src 'none';
     upgrade-insecure-requests;
   `.replace(/\s{2,}/g, ' ').trim()
 
-  // Set security headers
   response.headers.set('Content-Security-Policy', cspHeader)
   response.headers.set('X-Frame-Options', 'DENY')
   response.headers.set('X-Content-Type-Options', 'nosniff')
@@ -73,8 +65,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Match all paths except public files
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
-

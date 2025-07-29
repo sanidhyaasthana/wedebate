@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { createBrowserClient } from '@/lib/supabase';
+import { useAuth } from '@/components/auth/AuthProvider';
+import { createClient } from '@/utils/supabase/client';
 import { Database } from '@/types/supabase';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
@@ -28,63 +29,41 @@ const useClientSideData = () => {
   return { isDarkMode, setIsDarkMode, mounted };
 };
 
-const useAuth = () => {
-  const [user, setUser] = useState<any>(null);
+const useProfile = () => {
+  const { user, loading: authLoading } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const supabase = createBrowserClient();
+  const supabase = createClient();
 
   useEffect(() => {
-    const getUser = async () => {
+    const getProfile = async () => {
+      if (!user) {
+        setProfile(null);
+        setIsLoading(false);
+        return;
+      }
+
       try {
-        const { data } = await supabase.auth.getUser();
-        setUser(data.user);
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
 
-        if (data.user) {
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', data.user.id)
-            .single();
-
-          setProfile(profileData);
-        }
+        setProfile(profileData);
       } catch (error) {
-        console.error('Error fetching user:', error);
+        console.error('Error fetching profile:', error);
       } finally {
         setIsLoading(false);
       }
     };
 
-    getUser();
+    if (!authLoading) {
+      getProfile();
+    }
+  }, [user, authLoading, supabase]);
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setUser(session?.user || null);
-
-      if (session?.user) {
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-
-        setProfile(profileData);
-      } else {
-        setProfile(null);
-      }
-    });
-
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
-  }, [supabase]);
-
-  const signOut = async () => {
-    await supabase.auth.signOut();
-    window.location.href = '/';
-  };
-
-  return { user, profile, isLoading, signOut };
+  return { profile, isLoading: authLoading || isLoading };
 };
 
 const navLinks = [
@@ -98,7 +77,8 @@ const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const pathname = usePathname();
   const { isDarkMode, setIsDarkMode, mounted } = useClientSideData();
-  const { user, profile, isLoading, signOut } = useAuth();
+  const { user, signOut } = useAuth();
+  const { profile, isLoading } = useProfile();
 
   const toggleDarkMode = () => {
     const newMode = !isDarkMode;
