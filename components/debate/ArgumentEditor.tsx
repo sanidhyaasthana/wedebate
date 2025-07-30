@@ -54,13 +54,25 @@ const ArgumentEditor = ({
         </div>
       </div>
 
-      <textarea
-        value={value}
-        onChange={handleChange}
-        placeholder="Write your argument here..."
-        className="w-full h-40 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-        disabled={disabled}
-      />
+      <div className="relative">
+        <textarea
+          value={value}
+          onChange={handleChange}
+          placeholder="Write your argument here..."
+          className={`w-full h-40 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none ${
+            isRecording 
+              ? 'border-red-300 bg-red-50 dark:bg-red-900/10 dark:border-red-600' 
+              : 'border-gray-300 dark:border-gray-600 dark:bg-gray-700'
+          }`}
+          disabled={disabled}
+        />
+        {isRecording && (
+          <div className="absolute top-2 right-2 flex items-center gap-2 bg-red-100 dark:bg-red-900/30 px-2 py-1 rounded text-xs text-red-700 dark:text-red-300">
+            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+            Recording
+          </div>
+        )}
+      </div>
 
       <div className="flex justify-between items-center">
         <button

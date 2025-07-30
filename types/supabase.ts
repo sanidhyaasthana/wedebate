@@ -35,6 +35,7 @@ export interface Database {
           created_at: string
           topic: string
           format_id: string
+          format: string | null
           status: 'waiting' | 'in_progress' | 'completed'
           creator_id: string
           opponent_id: string | null
@@ -47,6 +48,7 @@ export interface Database {
           created_at?: string
           topic: string
           format_id: string
+          format?: string | null
           status?: 'waiting' | 'in_progress' | 'completed'
           creator_id: string
           opponent_id?: string | null
@@ -59,6 +61,7 @@ export interface Database {
           created_at?: string
           topic?: string
           format_id?: string
+          format?: string | null
           status?: 'waiting' | 'in_progress' | 'completed'
           creator_id?: string
           opponent_id?: string | null
@@ -94,6 +97,79 @@ export interface Database {
           segment?: string
           content?: string
           sequence?: number
+        }
+      }
+      debate_feedback: {
+        Row: {
+          id: string
+          created_at: string
+          user_id: string
+          topic: string
+          creator_arguments: string
+          opponent_arguments: string
+          feedback: Json
+          is_ai_response: boolean
+          clarity: number | null
+          logic: number | null
+          persuasiveness: number | null
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          user_id: string
+          topic: string
+          creator_arguments: string
+          opponent_arguments: string
+          feedback: Json
+          is_ai_response?: boolean
+          clarity?: number | null
+          logic?: number | null
+          persuasiveness?: number | null
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          user_id?: string
+          topic?: string
+          creator_arguments?: string
+          opponent_arguments?: string
+          feedback?: Json
+          is_ai_response?: boolean
+          clarity?: number | null
+          logic?: number | null
+          persuasiveness?: number | null
+        }
+      }
+      practice_sessions: {
+        Row: {
+          id: string
+          created_at: string
+          user_id: string
+          topic: string
+          duration: number | null
+          arguments_count: number | null
+          feedback: Json | null
+          completed: boolean
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          user_id: string
+          topic: string
+          duration?: number | null
+          arguments_count?: number | null
+          feedback?: Json | null
+          completed?: boolean
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          user_id?: string
+          topic?: string
+          duration?: number | null
+          arguments_count?: number | null
+          feedback?: Json | null
+          completed?: boolean
         }
       }
       profiles: {

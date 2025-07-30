@@ -24,6 +24,7 @@ import { sampleDebateTopics, debateFormats } from '@/utils/aiPrompts';
 import ArgumentEditor from '@/components/debate/ArgumentEditor';
 import FeedbackModal from '@/components/debate/FeedbackModal';
 import { formatTime } from '@/utils/timeUtils';
+import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 
 
 export default function PracticePage() { 
@@ -43,12 +44,26 @@ export default function PracticePage() {
   const [argument, setArgument] = useState('');
   const [aiArgument, setAiArgument] = useState('');
   const [timeRemaining, setTimeRemaining] = useState(180); // 3 minutes default
+  const [initialTime, setInitialTime] = useState(180); // Track initial time for progress bar
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [feedback, setFeedback] = useState<any>(null);
   const [isGeneratingFeedback, setIsGeneratingFeedback] = useState(false);
   const [userArgument, setUserArgument] = useState('');
   const [aiResponse, setAiResponse] = useState<string | null>(null);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const [timerFinished, setTimerFinished] = useState(false);
+
+  // Speech recognition hook
+  const {
+    isListening,
+    transcript,
+    interimTranscript,
+    startListening,
+    stopListening,
+    resetTranscript,
+    isSupported: speechSupported,
+    error: speechError
+  } = useSpeechRecognition();
 
   // Check authentication status
   useEffect(() => {
@@ -84,30 +99,79 @@ export default function PracticePage() {
     
     if (isTimerRunning && timeRemaining > 0) {
       interval = setInterval(() => {
-        setTimeRemaining((prev) => prev - 1);
+        setTimeRemaining((prev) => {
+          const newTime = prev - 1;
+          console.log("Timer tick:", newTime);
+          return newTime;
+        });
       }, 1000);
-    } else if (timeRemaining === 0) {
+    } else if (timeRemaining === 0 && isTimerRunning) {
       setIsTimerRunning(false);
+      setTimerFinished(true);
+      console.log("Timer finished - auto-submitting");
+      
+      // Play a sound notification (if supported)
+      try {
+        const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT');
+        audio.play().catch(() => {
+          // Fallback: just log if audio fails
+          console.log("Timer finished!");
+        });
+      } catch (error) {
+        console.log("Timer finished!");
+      }
+      
+      // Clear the notification after 3 seconds
+      setTimeout(() => setTimerFinished(false), 3000);
+      
       // Auto-submit when time runs out
       if (practiceMode === 'practice' && argument.trim()) {
         handleSubmitArgument();
       }
     }
     
-    return () => clearInterval(interval);
-  }, 
-  
-  
-  
-  [isTimerRunning, timeRemaining, practiceMode, argument]);
-  useEffect(() => {
-  console.log("Timer:", { isTimerRunning, timeRemaining });
-}, [isTimerRunning, timeRemaining]);
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [isTimerRunning, timeRemaining, practiceMode, argument]);
 
-
+  // Debug timer state
   useEffect(() => {
-  console.log("Timer:", { isTimerRunning, timeRemaining });
-}, [isTimerRunning, timeRemaining]);
+    console.log("Timer state:", { isTimerRunning, timeRemaining, practiceMode });
+  }, [isTimerRunning, timeRemaining, practiceMode]);
+
+  // Handle speech recognition transcript
+  useEffect(() => {
+    if (transcript) {
+      // Append the new transcript to the current argument
+      setArgument(prev => {
+        const newValue = prev + (prev ? ' ' : '') + transcript;
+        setUserArgument(newValue);
+        return newValue;
+      });
+      // Reset transcript after adding it to prevent duplication
+      resetTranscript();
+    }
+  }, [transcript, resetTranscript]);
+
+  // Show interim transcript in real-time
+  const displayValue = argument + (interimTranscript ? (argument ? ' ' : '') + interimTranscript : '');
+
+  // Handle speech recognition toggle
+  const handleToggleRecording = () => {
+    if (!speechSupported) {
+      alert('Speech recognition is not supported in your browser. Please use Chrome, Edge, or Safari.');
+      return;
+    }
+
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  };
   // Start practice session
   const handleStartPractice = () => {
     const topic = customTopic.trim() || selectedTopic;
@@ -121,7 +185,9 @@ export default function PracticePage() {
     
     setAiArgument(placeholderAiArgument);
     setPracticeMode('practice');
-    setTimeRemaining(180); // Reset timer to 3 minutes
+    setInitialTime(timeRemaining); // Store the initial time for progress calculation
+    setIsTimerRunning(true); // Start the timer automatically
+    console.log("Practice started - timer should be running with", timeRemaining, "seconds");
   };
 
   // Submit user argument and get feedback - Modified to accept optional aiArgumentOverride
@@ -269,10 +335,22 @@ const currentSegment = selectedDebateFormat.structure[currentSegmentIndex].name;
   const handleReset = () => {
     setPracticeMode('select');
     setArgument('');
+    setUserArgument('');
     setAiArgument('');
     setTimeRemaining(180);
+    setInitialTime(180);
     setIsTimerRunning(false);
+    setTimerFinished(false);
     setFeedback(null);
+    setFeedbackError(null);
+    
+    // Stop speech recognition if it's running
+    if (isListening) {
+      stopListening();
+    }
+    resetTranscript();
+    
+    console.log("Practice session reset");
   };
 
   if (loading) {
@@ -326,7 +404,7 @@ const currentSegment = selectedDebateFormat.structure[currentSegmentIndex].name;
             </div>
           </div>
           
-          <div className="mb-8">
+          <div className="mb-6">
             <label className="block text-gray-700 dark:text-gray-300 mb-2">
               Choose Your Position
             </label>
@@ -345,6 +423,50 @@ const currentSegment = selectedDebateFormat.structure[currentSegmentIndex].name;
               </button>
             </div>
           </div>
+
+          <div className="mb-8">
+            <label className="block text-gray-700 dark:text-gray-300 mb-2">
+              Time Limit
+            </label>
+            <div className="flex gap-4">
+              <button
+                onClick={() => {
+                  setTimeRemaining(120);
+                  setInitialTime(120);
+                }}
+                className={`flex-1 py-2 px-3 rounded-lg border text-sm ${timeRemaining === 120 ? 'bg-blue-100 border-blue-500 dark:bg-blue-900/50 dark:border-blue-400' : 'border-gray-300 dark:border-gray-600'}`}
+              >
+                2 min
+              </button>
+              <button
+                onClick={() => {
+                  setTimeRemaining(180);
+                  setInitialTime(180);
+                }}
+                className={`flex-1 py-2 px-3 rounded-lg border text-sm ${timeRemaining === 180 ? 'bg-blue-100 border-blue-500 dark:bg-blue-900/50 dark:border-blue-400' : 'border-gray-300 dark:border-gray-600'}`}
+              >
+                3 min
+              </button>
+              <button
+                onClick={() => {
+                  setTimeRemaining(300);
+                  setInitialTime(300);
+                }}
+                className={`flex-1 py-2 px-3 rounded-lg border text-sm ${timeRemaining === 300 ? 'bg-blue-100 border-blue-500 dark:bg-blue-900/50 dark:border-blue-400' : 'border-gray-300 dark:border-gray-600'}`}
+              >
+                5 min
+              </button>
+              <button
+                onClick={() => {
+                  setTimeRemaining(600);
+                  setInitialTime(600);
+                }}
+                className={`flex-1 py-2 px-3 rounded-lg border text-sm ${timeRemaining === 600 ? 'bg-blue-100 border-blue-500 dark:bg-blue-900/50 dark:border-blue-400' : 'border-gray-300 dark:border-gray-600'}`}
+              >
+                10 min
+              </button>
+            </div>
+          </div>
           
           <div className="flex justify-end">
             <button
@@ -359,7 +481,50 @@ const currentSegment = selectedDebateFormat.structure[currentSegmentIndex].name;
       )}
       
       {practiceMode === 'practice' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div>
+          {/* Timer finished notification */}
+          {timerFinished && (
+            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg animate-pulse">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                    Time's Up!
+                  </h3>
+                  <div className="mt-1 text-sm text-red-700 dark:text-red-300">
+                    Your practice time has ended. Submit your argument to get feedback.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Speech recognition not supported notification */}
+          {!speechSupported && (
+            <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                    Speech Recognition Not Available
+                  </h3>
+                  <div className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">
+                    Voice recording is not supported in your browser. Please use Chrome, Edge, or Safari for the best experience.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* AI Argument */}
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-md">
             <h2 className="text-xl font-semibold mb-4">
@@ -376,21 +541,81 @@ const currentSegment = selectedDebateFormat.structure[currentSegmentIndex].name;
               <h2 className="text-xl font-semibold">
                 Your {position === 'for' ? 'Supporting' : 'Opposing'} Argument
               </h2>
-              <div className={`text-lg font-mono ${timeRemaining < 30 ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'}`}>
-                {formatTime(timeRemaining)}
+              <div className="flex flex-col items-end gap-2">
+                <div className="flex items-center gap-3">
+                  <div className={`text-lg font-mono ${timeRemaining < 30 ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'}`}>
+                    {formatTime(timeRemaining)}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setIsTimerRunning(!isTimerRunning);
+                        console.log("Timer toggled:", !isTimerRunning);
+                      }}
+                      className={`px-3 py-1 text-sm rounded ${
+                        isTimerRunning 
+                          ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300' 
+                          : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300'
+                      } transition duration-200`}
+                    >
+                      {isTimerRunning ? 'Pause' : 'Start'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setTimeRemaining(initialTime);
+                        setIsTimerRunning(false);
+                        console.log("Timer reset to", initialTime, "seconds");
+                      }}
+                      className="px-3 py-1 text-sm rounded bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition duration-200"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                </div>
+                {/* Timer progress bar */}
+                <div className="w-48 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  <div 
+                    className={`h-2 rounded-full transition-all duration-1000 ${
+                      timeRemaining < 30 ? 'bg-red-500' : timeRemaining < 60 ? 'bg-yellow-500' : 'bg-green-500'
+                    } ${isTimerRunning ? 'animate-pulse' : ''}`}
+                    style={{ 
+                      width: `${Math.max(0, (timeRemaining / initialTime) * 100)}%` 
+                    }}
+                  ></div>
+                </div>
+                {isTimerRunning && (
+                  <div className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    Timer running
+                  </div>
+                )}
+                {isListening && (
+                  <div className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
+                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                    Recording...
+                  </div>
+                )}
+                {speechError && (
+                  <div className="text-xs text-orange-600 dark:text-orange-400">
+                    Speech error: {speechError}
+                  </div>
+                )}
               </div>
             </div>
             
             <ArgumentEditor
-              value={argument}
+              value={displayValue}
               onChange={(value) => {
-                setArgument(value);
-                setUserArgument(value);
+                // Only update if it's not from speech recognition
+                if (!isListening) {
+                  setArgument(value);
+                  setUserArgument(value);
+                }
               }}
               onSubmit={handleSubmitWithCurrentAI}
               timeRemaining={timeRemaining}
-              isRecording={false} // Not using speech recognition in practice mode
-              onToggleRecording={() => {}} // Placeholder function
+              isRecording={isListening}
+              onToggleRecording={handleToggleRecording}
               disabled={isGeneratingFeedback}
               onGenerateArgument={handleGenerateAIArgument}
               showAIButtons={true}
@@ -411,6 +636,7 @@ const currentSegment = selectedDebateFormat.structure[currentSegmentIndex].name;
                 {isGeneratingFeedback ? 'Generating Feedback...' : 'Submit & Get Feedback'}
               </button>
             </div>
+          </div>
           </div>
         </div>
       )}

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { createClient } from '@/utils/supabase/client';
+import { checkAndSetupDatabase } from '@/utils/database-setup';
 import Link from 'next/link';
 
 export default function ProfilePage() {
@@ -24,6 +25,7 @@ export default function ProfilePage() {
   const [debateHistory, setDebateHistory] = useState<any[]>([]);
   const [practiceHistory, setPracticeHistory] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'debates' | 'practice'>('debates');
+  const [databaseStatus, setDatabaseStatus] = useState<string | null>(null);
   
   // Check authentication status and load data
   useEffect(() => {
@@ -33,6 +35,14 @@ export default function ProfilePage() {
       router.push('/auth/signin?redirect=/profile');
       return;
     }
+
+    // Check database setup first
+    checkAndSetupDatabase().then((result) => {
+      if (!result.success) {
+        setDatabaseStatus(result.message);
+        console.warn('Database setup issue:', result);
+      }
+    });
 
     // Load user data
     fetchUserProfile(user.id);
@@ -64,42 +74,63 @@ export default function ProfilePage() {
   // Fetch user stats
   const fetchUserStats = async (userId: string) => {
     try {
+      console.log('Fetching stats for user:', userId);
+      
       // Get debate stats
       const { data: debatesData, error: debatesError } = await supabase
         .from('debates')
         .select('id, status')
         .or(`creator_id.eq.${userId},opponent_id.eq.${userId}`);
       
-      if (debatesError) throw debatesError;
+      if (debatesError) {
+        console.error('Error fetching debates:', debatesError);
+        // Don't throw, continue with other queries
+      }
       
       const totalDebates = debatesData?.length || 0;
       const completedDebates = debatesData?.filter(d => d.status === 'completed').length || 0;
+      console.log('Debate stats:', { totalDebates, completedDebates });
       
-      // Get feedback stats
-      const { data: feedbackData, error: feedbackError } = await supabase
-        .from('debate_feedback')
-        .select('clarity, logic, persuasiveness')
-        .eq('user_id', userId);
-      
-      if (feedbackError) throw feedbackError;
-      
+      // Get feedback stats - handle case where table might not exist
       let avgClarity = 0;
       let avgLogic = 0;
       let avgPersuasiveness = 0;
       
-      if (feedbackData && feedbackData.length > 0) {
-        avgClarity = feedbackData.reduce((sum, item) => sum + (item.clarity || 0), 0) / feedbackData.length;
-        avgLogic = feedbackData.reduce((sum, item) => sum + (item.logic || 0), 0) / feedbackData.length;
-        avgPersuasiveness = feedbackData.reduce((sum, item) => sum + (item.persuasiveness || 0), 0) / feedbackData.length;
+      try {
+        const { data: feedbackData, error: feedbackError } = await supabase
+          .from('debate_feedback')
+          .select('clarity, logic, persuasiveness')
+          .eq('user_id', userId);
+        
+        if (feedbackError) {
+          console.error('Error fetching feedback (table might not exist):', feedbackError);
+        } else if (feedbackData && feedbackData.length > 0) {
+          avgClarity = feedbackData.reduce((sum, item) => sum + (item.clarity || 0), 0) / feedbackData.length;
+          avgLogic = feedbackData.reduce((sum, item) => sum + (item.logic || 0), 0) / feedbackData.length;
+          avgPersuasiveness = feedbackData.reduce((sum, item) => sum + (item.persuasiveness || 0), 0) / feedbackData.length;
+          console.log('Feedback stats:', { avgClarity, avgLogic, avgPersuasiveness });
+        }
+      } catch (feedbackError) {
+        console.error('Feedback table query failed (table might not exist):', feedbackError);
       }
       
-      // Get practice stats
-      const { data: practiceData, error: practiceError } = await supabase
-        .from('practice_sessions')
-        .select('id')
-        .eq('user_id', userId);
-      
-      if (practiceError) throw practiceError;
+      // Get practice stats - handle case where table might not exist
+      let practiceSessions = 0;
+      try {
+        const { data: practiceData, error: practiceError } = await supabase
+          .from('practice_sessions')
+          .select('id')
+          .eq('user_id', userId);
+        
+        if (practiceError) {
+          console.error('Error fetching practice sessions (table might not exist):', practiceError);
+        } else {
+          practiceSessions = practiceData?.length || 0;
+          console.log('Practice sessions:', practiceSessions);
+        }
+      } catch (practiceError) {
+        console.error('Practice sessions table query failed (table might not exist):', practiceError);
+      }
       
       setStats({
         totalDebates,
@@ -107,7 +138,7 @@ export default function ProfilePage() {
         averageClarity: parseFloat(avgClarity.toFixed(1)),
         averageLogic: parseFloat(avgLogic.toFixed(1)),
         averagePersuasiveness: parseFloat(avgPersuasiveness.toFixed(1)),
-        practiceSessions: practiceData?.length || 0
+        practiceSessions
       });
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -120,9 +151,7 @@ export default function ProfilePage() {
       const { data, error } = await supabase
         .from('debates')
         .select(`
-          id, topic, format, status, created_at,
-          creator:creator_id(id, username),
-          opponent:opponent_id(id, username)
+          id, topic, format, status, created_at, creator_id, opponent_id
         `)
         .or(`creator_id.eq.${userId},opponent_id.eq.${userId}`)
         .order('created_at', { ascending: false })
@@ -130,7 +159,31 @@ export default function ProfilePage() {
       
       if (error) throw error;
       
-      setDebateHistory(data || []);
+      // Fetch creator and opponent profiles separately
+      const debatesWithProfiles = await Promise.all(
+        (data || []).map(async (debate) => {
+          const [creatorProfile, opponentProfile] = await Promise.all([
+            debate.creator_id ? supabase
+              .from('profiles')
+              .select('id, username')
+              .eq('id', debate.creator_id)
+              .single() : null,
+            debate.opponent_id ? supabase
+              .from('profiles')
+              .select('id, username')
+              .eq('id', debate.opponent_id)
+              .single() : null
+          ]);
+          
+          return {
+            ...debate,
+            creator: creatorProfile?.data || { id: debate.creator_id, username: 'Unknown' },
+            opponent: opponentProfile?.data || { id: debate.opponent_id, username: 'Unknown' }
+          };
+        })
+      );
+      
+      setDebateHistory(debatesWithProfiles);
     } catch (error) {
       console.error('Error fetching debate history:', error);
     }
@@ -139,6 +192,8 @@ export default function ProfilePage() {
   // Fetch practice history
   const fetchPracticeHistory = async (userId: string) => {
     try {
+      console.log('Fetching practice history for user:', userId);
+      
       const { data, error } = await supabase
         .from('practice_sessions')
         .select('*')
@@ -146,11 +201,17 @@ export default function ProfilePage() {
         .order('created_at', { ascending: false })
         .limit(10);
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching practice history (table might not exist):', error);
+        setPracticeHistory([]);
+        return;
+      }
       
+      console.log('Practice history data:', data);
       setPracticeHistory(data || []);
     } catch (error) {
       console.error('Error fetching practice history:', error);
+      setPracticeHistory([]);
     }
   };
 
@@ -191,6 +252,28 @@ export default function ProfilePage() {
 
   return (
     <div className="container mx-auto px-4 py-12">
+      {databaseStatus && (
+        <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                Database Setup Required
+              </h3>
+              <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
+                <p>{databaseStatus}</p>
+                <p className="mt-1">
+                  Please run the <code className="bg-yellow-100 dark:bg-yellow-800 px-1 rounded">database-setup.sql</code> script in your Supabase SQL editor to enable all features.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Profile Section */}
         <div className="lg:col-span-1">

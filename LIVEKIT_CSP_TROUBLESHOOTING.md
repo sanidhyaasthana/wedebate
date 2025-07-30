@@ -1,3 +1,4 @@
+git add LICENSE
 # LiveKit Content Security Policy (CSP) Troubleshooting Guide
 
 ## 🚨 Issue Resolved
