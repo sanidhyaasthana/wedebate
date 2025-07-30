@@ -10,6 +10,17 @@ declare global {
   }
 }
 
+// Extend SpeechRecognitionEvent to include missing properties
+interface ExtendedSpeechRecognitionEvent extends Event {
+  resultIndex: number;
+  results: SpeechRecognitionResultList;
+}
+
+interface ExtendedSpeechRecognitionErrorEvent extends Event {
+  error: string;
+  message?: string;
+}
+
 interface SpeechRecognitionHook {
   isListening: boolean;
   transcript: string;
@@ -26,7 +37,7 @@ export const useSpeechRecognition = (): SpeechRecognitionHook => {
   const [transcript, setTranscript] = useState('');
   const [interimTranscript, setInterimTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<InstanceType<typeof SpeechRecognition> | null>(null);
 
   // Check if speech recognition is supported
   const isSupported = typeof window !== 'undefined' && 
@@ -52,7 +63,7 @@ export const useSpeechRecognition = (): SpeechRecognitionHook => {
         console.log('Speech recognition started');
       };
 
-      recognition.onresult = (event: SpeechRecognitionEvent) => {
+      recognition.onresult = (event: ExtendedSpeechRecognitionEvent) => {
         let finalTranscript = '';
         let currentInterimTranscript = '';
 
@@ -74,7 +85,7 @@ export const useSpeechRecognition = (): SpeechRecognitionHook => {
         }
       };
 
-      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      recognition.onerror = (event: ExtendedSpeechRecognitionErrorEvent) => {
         console.error('Speech recognition error:', event.error);
         setError(`Speech recognition error: ${event.error}`);
         setIsListening(false);
