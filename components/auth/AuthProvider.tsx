@@ -32,50 +32,144 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
 
+  // Helper function to persist user data
+  const persistUserData = (userData: User | null) => {
+    if (typeof window !== 'undefined') {
+      if (userData) {
+        localStorage.setItem('wedebate_user', JSON.stringify(userData));
+      } else {
+        localStorage.removeItem('wedebate_user');
+      }
+    }
+  };
+
+  // Helper function to restore user data
+  const restoreUserData = (): User | null => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('wedebate_user');
+        return stored ? JSON.parse(stored) : null;
+      } catch (error) {
+        console.error('Error restoring user data:', error);
+        localStorage.removeItem('wedebate_user');
+      }
+    }
+    return null;
+  };
+
   useEffect(() => {
+    let mounted = true;
+
+    // Restore user data immediately from localStorage for faster UI updates
+    const restoredUser = restoreUserData();
+    if (restoredUser && mounted) {
+      setUser(restoredUser);
+      setLoading(false); // Set loading to false immediately if we have cached data
+    }
+
     // Get initial session
     const getInitialSession = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error) {
           console.error('Error getting session:', error);
+          // Clear any stale localStorage data
+          persistUserData(null);
         } else {
-          setSession(session);
-          setUser(session?.user ?? null);
+          if (mounted) {
+            setSession(session);
+            const currentUser = session?.user ?? null;
+            setUser(currentUser);
+            persistUserData(currentUser);
+            console.log('Initial session loaded:', currentUser?.email || 'No user');
+          }
         }
       } catch (error) {
         console.error('Error in getInitialSession:', error);
+        persistUserData(null);
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
     getInitialSession();
 
+    // Set up automatic token refresh
+    const refreshSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.refreshSession();
+        if (error) {
+          console.error('Error refreshing session:', error);
+        } else if (session && mounted) {
+          setSession(session);
+          setUser(session.user);
+          console.log('Session refreshed successfully');
+        }
+      } catch (error) {
+        console.error('Error in refreshSession:', error);
+      }
+    };
+
+    // Refresh session every 30 minutes
+    const refreshInterval = setInterval(refreshSession, 30 * 60 * 1000);
+
+    // Refresh session when window gains focus (user comes back to tab)
+    const handleFocus = () => {
+      refreshSession();
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', handleFocus);
+    }
+
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state changed:', event, session?.user?.email);
+        console.log('Auth state changed:', event, session?.user?.email || 'No user');
         
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
+        if (mounted) {
+          const currentUser = session?.user ?? null;
+          setSession(session);
+          setUser(currentUser);
+          persistUserData(currentUser);
+          setLoading(false);
 
-        // Handle session refresh
-        if (event === 'TOKEN_REFRESHED') {
-          console.log('Token refreshed successfully');
-        }
+          // Handle session refresh
+          if (event === 'TOKEN_REFRESHED') {
+            console.log('Token refreshed successfully');
+          }
 
-        // Handle sign out
-        if (event === 'SIGNED_OUT') {
-          setSession(null);
-          setUser(null);
+          // Handle sign out
+          if (event === 'SIGNED_OUT') {
+            console.log('User signed out');
+            setSession(null);
+            setUser(null);
+            persistUserData(null);
+          }
+
+          // Handle sign in
+          if (event === 'SIGNED_IN') {
+            console.log('User signed in:', session?.user?.email);
+            persistUserData(currentUser);
+          }
+
+          // Handle initial session
+          if (event === 'INITIAL_SESSION') {
+            console.log('Initial session event:', session?.user?.email || 'No user');
+          }
         }
       }
     );
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
+      clearInterval(refreshInterval);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', handleFocus);
+      }
     };
   }, [supabase]);
 
@@ -84,6 +178,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.error('Error signing out:', error);
+      } else {
+        // Clear localStorage immediately
+        persistUserData(null);
+        setUser(null);
+        setSession(null);
       }
     } catch (error) {
       console.error('Error in signOut:', error);

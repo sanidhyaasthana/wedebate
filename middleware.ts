@@ -13,29 +13,37 @@ export async function middleware(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value
+        getAll() {
+          return request.cookies.getAll()
         },
-        set(name: string, value: string, options: { path?: string }) {
-          response.cookies.set({
-            name,
-            value,
-            ...options,
-            sameSite: 'lax',
-            httpOnly: true,
-          })
-        },
-        remove(name: string, options: { path?: string }) {
-          response.cookies.delete({
-            name,
-            ...options,
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set({
+              name,
+              value,
+              ...options,
+              sameSite: 'lax',
+              httpOnly: false,
+              secure: process.env.NODE_ENV === 'production',
+              maxAge: 60 * 60 * 24 * 30, // 30 days
+            })
           })
         },
       },
     }
   )
 
-  await supabase.auth.getUser()
+  // This will refresh the session if needed
+  const { data: { user }, error } = await supabase.auth.getUser()
+  
+  // Log session status for debugging
+  if (error) {
+    console.log('Middleware auth error:', error.message)
+  } else if (user) {
+    console.log('Middleware: User authenticated:', user.email)
+  } else {
+    console.log('Middleware: No authenticated user')
+  }
 
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64')
 

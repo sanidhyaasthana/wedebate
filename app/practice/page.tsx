@@ -18,25 +18,73 @@ const selectedDebateFormat = {
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { createBrowserClient } from '@supabase/ssr';
 import Link from 'next/link';
 import { sampleDebateTopics, debateFormats } from '@/utils/aiPrompts';
 import ArgumentEditor from '@/components/debate/ArgumentEditor';
 import FeedbackModal from '@/components/debate/FeedbackModal';
 import { formatTime } from '@/utils/timeUtils';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
+import { useAuth } from '@/components/auth/AuthProvider';
+import { createClient } from '@/utils/supabase/client';
 
 
 export default function PracticePage() { 
   const router = useRouter();
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-  
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const supabase = createClient();
+  const { user, loading } = useAuth();
   const [practiceMode, setPracticeMode] = useState<'select' | 'practice' | 'feedback'>('select');
+
+  // Helper function to validate session before API calls
+  const validateSession = async () => {
+    if (!user) {
+      alert('Please sign in to continue.');
+      window.location.href = '/auth/signin';
+      return false;
+    }
+
+    // Double-check with Supabase to ensure session is still valid
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error || !session) {
+        console.error('Session validation failed:', error);
+        alert('Your session has expired. Please sign in again.');
+        window.location.href = '/auth/signin';
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error('Error validating session:', error);
+      alert('Authentication error. Please sign in again.');
+      window.location.href = '/auth/signin';
+      return false;
+    }
+  };
+
+  // Helper function for authenticated API calls
+  const authenticatedFetch = async (url: string, options: RequestInit = {}) => {
+    const response = await fetch(url, {
+      ...options,
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        console.error('Authentication error:', data.error);
+        alert('Your session has expired. Please sign in again.');
+        window.location.href = '/auth/signin';
+        throw new Error('Authentication failed');
+      }
+      throw new Error(data.error || `HTTP ${response.status}`);
+    }
+
+    return { response, data };
+  };
   
   const [selectedTopic, setSelectedTopic] = useState('');
   const [customTopic, setCustomTopic] = useState('');
@@ -65,33 +113,7 @@ export default function PracticePage() {
     error: speechError
   } = useSpeechRecognition();
 
-  // Check authentication status
-  useEffect(() => {
-    const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setUser(session.user);
-      }
-      setLoading(false);
-    };
-    
-    checkUser();
-    
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (session?.user) {
-          setUser(session.user);
-        } else {
-          setUser(null);
-        }
-        setLoading(false);
-      }
-    );
-    
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
-  }, [supabase]);
+
 
   // Timer effect
   useEffect(() => {
@@ -194,6 +216,11 @@ export default function PracticePage() {
   const handleSubmitArgument = async (aiArgumentOverride?: string) => {
     if (!argument.trim()) return;
 
+    // Validate session before making API call
+    if (!(await validateSession())) {
+      return;
+    }
+
     setIsTimerRunning(false);
     setIsGeneratingFeedback(true);
 
@@ -211,25 +238,14 @@ export default function PracticePage() {
       }
 
       // Call the API endpoint to generate feedback
-      const response = await fetch('/api/feedback', {
+      const { data } = await authenticatedFetch('/api/feedback', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           topic,
           creatorArguments: argument.trim(),
           opponentArguments: currentAiArgument.trim(),
         }),
-        credentials: 'include', // Important for auth cookies
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        console.error('Feedback API error:', data);
-        throw new Error(data.error || 'Failed to generate feedback');
-      }
       
       // Validate feedback structure
       if (!data || typeof data !== 'object' || !('clarity' in data)) {
@@ -286,16 +302,18 @@ const currentSegment = selectedDebateFormat.structure[currentSegmentIndex].name;
     return;
   }
 
+  // Validate session before making API call
+  if (!(await validateSession())) {
+    return;
+  }
+
   setIsGeneratingFeedback(true);
   try {
     const topic = customTopic.trim() || selectedTopic;
     const stance = position === 'for' ? 'against' : 'for';
 
-    const response = await fetch('/api/argument', {
+    const { data } = await authenticatedFetch('/api/argument', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify({
         userArgument: userArgument.trim(),
         topic: topic,
@@ -304,11 +322,6 @@ const currentSegment = selectedDebateFormat.structure[currentSegmentIndex].name;
       }),
     });
 
-    if (!response.ok) {
-      throw new Error('Failed to generate AI argument');
-    }
-
-    const data = await response.json();
     const newAiArgument = data.argument;  // Expected { argument: string }
     setAiArgument(newAiArgument);
 

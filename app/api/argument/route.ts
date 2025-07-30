@@ -8,12 +8,23 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
-    if (authError || !user) {
+    if (authError) {
+      console.error('Auth error in argument API:', authError);
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Auth session missing! Please sign in again.' },
         { status: 401 }
       );
     }
+    
+    if (!user) {
+      console.error('No user found in argument API');
+      return NextResponse.json(
+        { error: 'Auth session missing! Please sign in again.' },
+        { status: 401 }
+      );
+    }
+    
+    console.log('User authenticated in argument API:', user.email);
 
     const { userArgument, topic, position, debateSegment } = await request.json();
 

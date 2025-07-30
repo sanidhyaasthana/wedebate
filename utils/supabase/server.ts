@@ -9,14 +9,28 @@ export async function createClient() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
+        getAll() {
+          return cookieStore.getAll()
         },
-        set(name: string, value: string, options: { path?: string; maxAge?: number; domain?: string; secure?: boolean }) {
-          cookieStore.set({ name, value, ...options, sameSite: 'lax', httpOnly: true })
-        },
-        remove(name: string, options: { path?: string; domain?: string }) {
-          cookieStore.set({ name, value: '', ...options, maxAge: 0 })
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set({
+                name,
+                value,
+                ...options,
+                sameSite: 'lax',
+                httpOnly: false,
+                secure: process.env.NODE_ENV === 'production',
+                maxAge: 60 * 60 * 24 * 30, // 30 days
+              })
+            })
+          } catch (error) {
+            // The `setAll` method was called from a Server Component.
+            // This can be ignored if you have middleware refreshing
+            // user sessions.
+            console.log('Server-side cookie setting ignored:', error)
+          }
         },
       },
     }

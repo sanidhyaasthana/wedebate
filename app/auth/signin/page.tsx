@@ -3,34 +3,28 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { createBrowserClient } from '@supabase/ssr';
+import { createClient } from '@/utils/supabase/client';
 import AuthForm from '@/components/auth/AuthForm';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 function SignInPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = createClient();
+  const { user } = useAuth();
   const redirectTo = searchParams.get('redirect') || '/';
   
   const [loading, setLoading] = useState(true);
   
   // Check if user is already signed in
   useEffect(() => {
-    const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        // User is already signed in, redirect
-        router.push(redirectTo);
-        return;
-      }
-      setLoading(false);
-    };
-    
-    checkUser();
-  }, [supabase, router, redirectTo]);
+    if (user) {
+      // User is already signed in, redirect
+      router.push(redirectTo);
+      return;
+    }
+    setLoading(false);
+  }, [user, router, redirectTo]);
 
   if (loading) {
     return (

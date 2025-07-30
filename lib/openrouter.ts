@@ -53,6 +53,7 @@ export async function generateDebateFeedback(
     3. Use proper JSON syntax with double quotes
     4. No additional text or explanations outside the JSON
     5. Ensure the response is valid parseable JSON
+    6. Alittle more descriptive in the feedback, but keep it concise
   `;
 
     try {
